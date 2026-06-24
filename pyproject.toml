@@ -1,0 +1,19 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "tkbase-phone-caller"
+version = "0.1.0"
+description = "AI phone caller with Twilio — Claude calls you with rate limiting"
+requires-python = ">=3.10"
+dependencies = [
+    "twilio>=9.0.0",
+    "structlog>=23.0.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "pytest-asyncio"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/tkbase_phone_caller"]
