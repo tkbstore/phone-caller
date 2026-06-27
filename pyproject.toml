@@ -4,15 +4,27 @@ build-backend = "hatchling.build"
 
 [project]
 name = "tkbase-phone-caller"
-version = "0.1.0"
-description = "AI phone caller with Twilio — Claude calls you with rate limiting"
+version = "0.5.0"
+description = "AI sales phone caller with LiveKit + OpenAI Realtime — Google Meet transfer, Notion logging"
 requires-python = ">=3.10"
 dependencies = [
-    "twilio>=9.0.0",
+    "livekit-agents[openai]>=1.5",
+    "livekit-api>=1.0",
+    "httpx>=0.27.0",
     "structlog>=23.0.0",
+    "python-dotenv>=1.0.0",
 ]
 
 [project.optional-dependencies]
+webhook = ["fastapi[standard]>=0.115.0"]
+google = [
+    "google-api-python-client>=2.100.0",
+    "google-auth-oauthlib>=1.0.0",
+    "google-auth-httplib2>=0.2.0",
+]
+all = [
+    "tkbase-phone-caller[webhook,google]",
+]
 dev = ["pytest", "pytest-asyncio"]
 
 [tool.hatch.build.targets.wheel]
