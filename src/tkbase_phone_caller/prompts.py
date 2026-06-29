@@ -1,6 +1,42 @@
-"""Sales call system prompt templates for Vapi assistant."""
+"""Sales call system prompt templates and global context management."""
 
 from __future__ import annotations
+
+import json
+from pathlib import Path
+
+_CONTEXT_DIR = Path.home() / ".config" / "tkbase"
+_CONTEXT_FILE = _CONTEXT_DIR / "sales_context.json"
+
+_DEFAULT_CONTEXT = {
+    "company_name": "",
+    "product_name": "",
+    "caller_name": "",
+    "purpose": "",
+    "custom_instructions": "",
+}
+
+
+def load_context() -> dict[str, str]:
+    """Load global sales context from disk."""
+    if not _CONTEXT_FILE.exists():
+        return dict(_DEFAULT_CONTEXT)
+    try:
+        data = json.loads(_CONTEXT_FILE.read_text(encoding="utf-8"))
+        return {**_DEFAULT_CONTEXT, **data}
+    except (json.JSONDecodeError, OSError):
+        return dict(_DEFAULT_CONTEXT)
+
+
+def save_context(ctx: dict[str, str]) -> Path:
+    """Save global sales context to disk."""
+    _CONTEXT_DIR.mkdir(parents=True, exist_ok=True)
+    merged = {**_DEFAULT_CONTEXT, **ctx}
+    _CONTEXT_FILE.write_text(
+        json.dumps(merged, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    return _CONTEXT_FILE
 
 _SALES_PROMPT_TEMPLATE = """\
 あなたは{company_name}の{caller_name}として電話営業を行うAIアシスタントです。

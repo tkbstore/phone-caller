@@ -1,0 +1,865 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phone Caller Dashboard</title>
+<style>
+:root {
+  --bg: #0a0a0a;
+  --surface: #141414;
+  --surface-hover: #1a1a1a;
+  --border: #262626;
+  --text: #e5e5e5;
+  --text-dim: #737373;
+  --accent: #3b82f6;
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  height: 100vh;
+  overflow: hidden;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 380px 1fr;
+  height: 100vh;
+  gap: 1px;
+  background: var(--border);
+}
+
+/* --- Left column --- */
+.left-col {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  overflow-y: auto;
+}
+
+.phone-section {
+  padding: 24px;
+  border-bottom: 1px solid var(--border);
+}
+
+.phone-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+}
+
+.phone-number {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+
+.phone-country {
+  font-size: 13px;
+  color: var(--text-dim);
+  margin-top: 4px;
+}
+
+.status-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #525252;
+}
+
+.status-dot.connected { background: var(--success); }
+.status-dot.alert { background: var(--warning); animation: pulse 1.5s ease-in-out infinite; }
+
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+.status-text {
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+/* Stats cards */
+.stats-section {
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border);
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+}
+
+.stat-card {
+  background: var(--surface);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.stat-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-label {
+  font-size: 11px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-top: 2px;
+}
+
+/* Cost graph */
+.graph-section {
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border);
+}
+
+.section-title {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+  margin-bottom: 12px;
+}
+
+.graph-container {
+  background: var(--surface);
+  border-radius: 8px;
+  padding: 16px;
+  height: 140px;
+  position: relative;
+}
+
+canvas#costChart {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* Context editor */
+.context-section {
+  padding: 20px 24px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.context-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.btn:hover { background: var(--surface-hover); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.primary:hover { opacity: 0.9; }
+
+.context-fields {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.field-group label {
+  display: block;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+  margin-bottom: 4px;
+}
+
+.field-group input,
+.field-group textarea {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  color: var(--text);
+  font-size: 13px;
+  font-family: inherit;
+  resize: vertical;
+}
+
+.field-group input:focus,
+.field-group textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.field-group textarea {
+  min-height: 80px;
+}
+
+.context-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.save-msg {
+  font-size: 12px;
+  color: var(--success);
+  margin-left: 8px;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.save-msg.show { opacity: 1; }
+
+/* --- Right column --- */
+.right-col {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  overflow: hidden;
+}
+
+.right-header {
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.right-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
+}
+
+/* Alert banner */
+.alert-banner {
+  display: none;
+  background: var(--warning);
+  color: #000;
+  padding: 12px 24px;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.alert-banner.show { display: flex; align-items: center; gap: 8px; }
+
+/* Call log list */
+.call-list {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.call-item {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 24px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.call-item:hover { background: var(--surface-hover); }
+
+.call-info {
+  min-width: 0;
+}
+
+.call-number {
+  font-size: 14px;
+  font-weight: 500;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.call-summary {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.call-meta {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.call-time {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.call-duration {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+
+.call-badge {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 500;
+}
+
+.badge-success { background: rgba(34,197,94,0.15); color: var(--success); }
+.badge-failed { background: rgba(239,68,68,0.15); color: var(--danger); }
+.badge-transfer { background: rgba(245,158,11,0.15); color: var(--warning); }
+
+.empty-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+  color: var(--text-dim);
+  font-size: 14px;
+}
+
+/* --- Call detail overlay --- */
+.detail-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  display: none;
+  z-index: 100;
+}
+
+.detail-overlay.show { display: flex; justify-content: center; align-items: center; }
+
+.detail-panel {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  width: 640px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.detail-header {
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.detail-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.detail-close {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 20px;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+
+.detail-close:hover { color: var(--text); }
+
+.detail-meta {
+  padding: 16px 24px;
+  display: flex;
+  gap: 24px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.detail-meta span { color: #fff; font-weight: 500; }
+
+/* Chat-style transcript */
+.chat-log {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.chat-bubble {
+  max-width: 80%;
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-size: 14px;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.chat-bubble.ai {
+  align-self: flex-start;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+
+.chat-bubble.user {
+  align-self: flex-end;
+  background: var(--accent);
+  color: #fff;
+}
+
+.chat-role {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+  margin-bottom: 4px;
+}
+
+.chat-bubble.user .chat-role { color: rgba(255,255,255,0.7); }
+
+.no-transcript {
+  color: var(--text-dim);
+  text-align: center;
+  padding: 40px;
+  font-size: 14px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+  }
+  .left-col {
+    max-height: 40vh;
+  }
+}
+</style>
+</head>
+<body>
+
+<div class="layout">
+  <!-- Left Column -->
+  <div class="left-col">
+    <!-- Phone Number -->
+    <div class="phone-section">
+      <div class="phone-label">Phone Number</div>
+      <div class="phone-number" id="phoneNumber">--</div>
+      <div class="phone-country" id="phoneCountry"></div>
+      <div class="status-row">
+        <div class="status-dot" id="statusDot"></div>
+        <span class="status-text" id="statusText">Connecting...</span>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-section">
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-value" id="totalCalls">0</div>
+          <div class="stat-label">Calls</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="totalCost">$0</div>
+          <div class="stat-label">Cost</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="totalDuration">0m</div>
+          <div class="stat-label">Duration</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Cost Graph -->
+    <div class="graph-section">
+      <div class="section-title">Daily Cost</div>
+      <div class="graph-container">
+        <canvas id="costChart"></canvas>
+      </div>
+    </div>
+
+    <!-- Context Editor -->
+    <div class="context-section">
+      <div class="context-header">
+        <div class="section-title" style="margin-bottom:0">Sales Context</div>
+        <div>
+          <span class="save-msg" id="saveMsg">Saved</span>
+          <button class="btn primary" id="saveCtxBtn" onclick="saveContext()">Save</button>
+        </div>
+      </div>
+      <div class="context-fields">
+        <div class="field-group">
+          <label>Company Name</label>
+          <input type="text" id="ctxCompany" placeholder="e.g. TechKnowledge Base">
+        </div>
+        <div class="field-group">
+          <label>Product</label>
+          <input type="text" id="ctxProduct" placeholder="e.g. AI Phone Caller">
+        </div>
+        <div class="field-group">
+          <label>Caller Name</label>
+          <input type="text" id="ctxCaller" placeholder="e.g. Tanaka">
+        </div>
+        <div class="field-group">
+          <label>Purpose</label>
+          <input type="text" id="ctxPurpose" placeholder="e.g. SEO improvement proposal">
+        </div>
+        <div class="field-group">
+          <label>Custom Instructions</label>
+          <textarea id="ctxInstructions" placeholder="Additional instructions for the AI agent..."></textarea>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right Column -->
+  <div class="right-col">
+    <div class="right-header">
+      <div class="right-title">Call Log</div>
+      <button class="btn" onclick="loadCalls()">Refresh</button>
+    </div>
+    <div class="alert-banner" id="alertBanner"></div>
+    <div class="call-list" id="callList">
+      <div class="empty-state">No calls yet</div>
+    </div>
+  </div>
+</div>
+
+<!-- Call Detail Overlay -->
+<div class="detail-overlay" id="detailOverlay" onclick="closeDetail(event)">
+  <div class="detail-panel" onclick="event.stopPropagation()">
+    <div class="detail-header">
+      <div class="detail-title" id="detailTitle">Call Detail</div>
+      <button class="detail-close" onclick="closeDetail()">&times;</button>
+    </div>
+    <div class="detail-meta" id="detailMeta"></div>
+    <div class="chat-log" id="chatLog"></div>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+
+// --- WebSocket ---
+let ws;
+function connectWS() {
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(`${proto}//${location.host}/ws`);
+  ws.onopen = () => {
+    $('statusDot').className = 'status-dot connected';
+    $('statusText').textContent = 'Connected';
+  };
+  ws.onclose = () => {
+    $('statusDot').className = 'status-dot';
+    $('statusText').textContent = 'Reconnecting...';
+    setTimeout(connectWS, 3000);
+  };
+  ws.onmessage = (e) => {
+    const data = JSON.parse(e.data);
+    if (data.type === 'transfer_requested') {
+      $('statusDot').className = 'status-dot alert';
+      $('alertBanner').textContent = data.message;
+      $('alertBanner').className = 'alert-banner show';
+      if (Notification.permission === 'granted') {
+        new Notification('Transfer Request', { body: data.message });
+      }
+    } else if (data.type === 'call_ended') {
+      $('statusDot').className = 'status-dot connected';
+      $('alertBanner').className = 'alert-banner';
+      loadCalls();
+      loadStats();
+    }
+  };
+}
+
+// --- Phone Numbers ---
+async function loadPhoneNumbers() {
+  try {
+    const res = await fetch('/api/phone-numbers');
+    const data = await res.json();
+    const entries = Object.values(data);
+    if (entries.length > 0) {
+      const first = entries[0];
+      $('phoneNumber').textContent = formatPhone(first.number);
+      $('phoneCountry').textContent = `${first.country} ${first.label ? '/ ' + first.label : ''}`;
+    }
+  } catch (e) {
+    $('phoneNumber').textContent = '--';
+  }
+}
+
+function formatPhone(num) {
+  if (!num) return '--';
+  // Format +1XXXXXXXXXX as +1 (XXX) XXX-XXXX
+  const m = num.match(/^\+1(\d{3})(\d{3})(\d{4})$/);
+  if (m) return `+1 (${m[1]}) ${m[2]}-${m[3]}`;
+  return num;
+}
+
+// --- Stats ---
+async function loadStats() {
+  try {
+    const res = await fetch('/api/stats');
+    const data = await res.json();
+    $('totalCalls').textContent = data.totals.calls;
+    $('totalCost').textContent = '$' + data.totals.cost.toFixed(2);
+    const mins = Math.round(data.totals.duration / 60);
+    $('totalDuration').textContent = mins + 'm';
+    drawChart(data.daily);
+  } catch (e) { /* ignore */ }
+}
+
+// --- Simple bar chart on canvas ---
+function drawChart(daily) {
+  const canvas = $('costChart');
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.parentElement.getBoundingClientRect();
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+  ctx.scale(dpr, dpr);
+  const W = rect.width;
+  const H = rect.height;
+
+  ctx.clearRect(0, 0, W, H);
+
+  if (!daily || daily.length === 0) {
+    ctx.fillStyle = '#525252';
+    ctx.font = '12px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('No data yet', W / 2, H / 2);
+    return;
+  }
+
+  const maxCost = Math.max(...daily.map(d => d.cost), 0.01);
+  const barW = Math.max(8, Math.min(40, (W - 40) / daily.length - 4));
+  const startX = (W - (barW + 4) * daily.length) / 2;
+
+  daily.forEach((d, i) => {
+    const x = startX + i * (barW + 4);
+    const barH = (d.cost / maxCost) * (H - 30);
+    const y = H - 20 - barH;
+
+    ctx.fillStyle = '#3b82f6';
+    ctx.beginPath();
+    ctx.roundRect(x, y, barW, barH, 3);
+    ctx.fill();
+
+    // Date label
+    ctx.fillStyle = '#525252';
+    ctx.font = '9px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(d.date.slice(5), x + barW / 2, H - 6);
+  });
+}
+
+// --- Call List ---
+async function loadCalls() {
+  try {
+    const res = await fetch('/api/calls');
+    const calls = await res.json();
+    const list = $('callList');
+
+    if (calls.length === 0) {
+      list.innerHTML = '<div class="empty-state">No calls yet</div>';
+      return;
+    }
+
+    list.innerHTML = calls.map(c => {
+      const reason = c.ended_reason || '';
+      let badgeClass = 'badge-success';
+      let badgeText = reason || 'completed';
+      if (reason.includes('error') || reason.includes('fail')) {
+        badgeClass = 'badge-failed';
+      } else if (reason.includes('transfer')) {
+        badgeClass = 'badge-transfer';
+        badgeText = 'transferred';
+      }
+
+      const ts = c.timestamp || '';
+      const timeStr = ts.length >= 15
+        ? `${ts.slice(0,4)}/${ts.slice(4,6)}/${ts.slice(6,8)} ${ts.slice(9,11)}:${ts.slice(11,13)}`
+        : '';
+
+      const dur = c.duration ? Math.round(c.duration) + 's' : '--';
+      const summary = c.summary
+        ? (c.summary.length > 60 ? c.summary.slice(0, 60) + '...' : c.summary)
+        : 'No summary';
+
+      return `
+        <div class="call-item" onclick="showDetail('${c.call_id}', '${encodeURIComponent(c.customer_number || '')}')">
+          <div class="call-info">
+            <div class="call-number">${c.customer_number || 'Unknown'}</div>
+            <div class="call-summary">${escHtml(summary)}</div>
+          </div>
+          <div class="call-meta">
+            <div class="call-time">${timeStr}</div>
+            <div class="call-duration">${dur}</div>
+          </div>
+          <span class="call-badge ${badgeClass}">${badgeText}</span>
+        </div>`;
+    }).join('');
+  } catch (e) {
+    $('callList').innerHTML = '<div class="empty-state">Failed to load</div>';
+  }
+}
+
+function escHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+// --- Call Detail ---
+async function showDetail(callId, encodedNumber) {
+  const overlay = $('detailOverlay');
+  const number = decodeURIComponent(encodedNumber);
+  $('detailTitle').textContent = number || 'Call Detail';
+
+  try {
+    const res = await fetch(`/api/calls/${callId}`);
+    const data = await res.json();
+
+    // Meta
+    const dur = data.durationSeconds || data.duration || 0;
+    const cost = data.cost || 0;
+    const reason = data.endedReason || data.ended_reason || '';
+    $('detailMeta').innerHTML = `
+      Duration: <span>${Math.round(dur)}s</span> &nbsp;|&nbsp;
+      Cost: <span>$${Number(cost).toFixed(4)}</span> &nbsp;|&nbsp;
+      Ended: <span>${reason}</span>
+    `;
+
+    // Transcript
+    const chatLog = $('chatLog');
+    const transcript = data.transcript || data.messages || [];
+
+    if (typeof transcript === 'string' && transcript.length > 0) {
+      // Plain text transcript — split by speaker tags
+      const lines = transcript.split('\n').filter(l => l.trim());
+      chatLog.innerHTML = lines.map(line => {
+        const isAI = line.toLowerCase().startsWith('ai:') || line.toLowerCase().startsWith('assistant:');
+        const text = line.replace(/^(ai|assistant|user|customer|human):\s*/i, '');
+        return `
+          <div class="chat-bubble ${isAI ? 'ai' : 'user'}">
+            <div class="chat-role">${isAI ? 'AI' : 'Customer'}</div>
+            ${escHtml(text)}
+          </div>`;
+      }).join('');
+    } else if (Array.isArray(transcript) && transcript.length > 0) {
+      chatLog.innerHTML = transcript.map(msg => {
+        const role = msg.role || '';
+        const isAI = role === 'assistant' || role === 'ai' || role === 'bot';
+        const text = msg.content || msg.text || msg.transcript || '';
+        return `
+          <div class="chat-bubble ${isAI ? 'ai' : 'user'}">
+            <div class="chat-role">${isAI ? 'AI' : 'Customer'}</div>
+            ${escHtml(text)}
+          </div>`;
+      }).join('');
+    } else {
+      chatLog.innerHTML = '<div class="no-transcript">No transcript available</div>';
+    }
+  } catch (e) {
+    $('chatLog').innerHTML = '<div class="no-transcript">Failed to load call data</div>';
+    $('detailMeta').innerHTML = '';
+  }
+
+  overlay.classList.add('show');
+}
+
+function closeDetail(e) {
+  if (e && e.target !== $('detailOverlay')) return;
+  $('detailOverlay').classList.remove('show');
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeDetail();
+});
+
+// --- Context ---
+async function loadContext() {
+  try {
+    const res = await fetch('/api/context');
+    const ctx = await res.json();
+    $('ctxCompany').value = ctx.company_name || '';
+    $('ctxProduct').value = ctx.product_name || '';
+    $('ctxCaller').value = ctx.caller_name || '';
+    $('ctxPurpose').value = ctx.purpose || '';
+    $('ctxInstructions').value = ctx.custom_instructions || '';
+  } catch (e) { /* ignore */ }
+}
+
+async function saveContext() {
+  const body = {
+    company_name: $('ctxCompany').value,
+    product_name: $('ctxProduct').value,
+    caller_name: $('ctxCaller').value,
+    purpose: $('ctxPurpose').value,
+    custom_instructions: $('ctxInstructions').value,
+  };
+  try {
+    await fetch('/api/context', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const msg = $('saveMsg');
+    msg.classList.add('show');
+    setTimeout(() => msg.classList.remove('show'), 2000);
+  } catch (e) { alert('Save failed'); }
+}
+
+// --- Notifications ---
+if ('Notification' in window && Notification.permission === 'default') {
+  Notification.requestPermission();
+}
+
+// --- Init ---
+connectWS();
+loadPhoneNumbers();
+loadStats();
+loadCalls();
+loadContext();
+</script>
+</body>
+</html>

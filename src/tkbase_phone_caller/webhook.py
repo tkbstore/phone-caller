@@ -1,26 +1,31 @@
-"""Webhook endpoint for Vapi call events with Notion logging.
+"""Webhook endpoint for call events with dashboard and REST API.
 
 Run standalone:
     uvicorn tkbase_phone_caller.webhook:app --host 0.0.0.0 --port 8000
 
-Vapi sends POST requests to your server URL with call events including
-end-of-call reports with transcript, duration, and outcome.
-
-Logs are saved to:
-    1. Local JSON files (~/.config/tkbase/call_logs/)
-    2. Notion database (if configured)
+Provides:
+    - POST /webhook/vapi — Vapi/LiveKit call event receiver
+    - GET / — Dashboard UI
+    - GET /api/calls — Call log listing
+    - GET /api/calls/{call_id} — Single call detail
+    - GET /api/context — Global sales context
+    - PUT /api/context — Update global sales context
+    - GET /api/stats — Cost/duration aggregates
+    - GET /api/phone-numbers — Registered phone numbers
+    - WS /ws — Real-time event stream
 """
 
 from __future__ import annotations
 
 import json
 import time
+from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
 import structlog
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 
 logger = structlog.get_logger()
 
@@ -268,112 +273,15 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
         logger.info("ws.disconnected", total_clients=len(_ws_clients))
 
 
-# --- Browser dashboard for WebRTC mode ---
+# --- Dashboard & REST API ---
 
-_DASHBOARD_HTML = """\
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Phone Caller Dashboard</title>
-<style>
-* { margin: 0; padding: 0; box-sizing: border-box; }
-body { font-family: -apple-system, sans-serif; background: #0a0a0a; color: #e0e0e0; padding: 2rem; }
-h1 { font-size: 1.5rem; margin-bottom: 1.5rem; color: #fff; }
-.status { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem; }
-.dot { width: 10px; height: 10px; border-radius: 50%; background: #444; }
-.dot.connected { background: #4ade80; }
-.dot.alert { background: #f97316; animation: pulse 1s infinite; }
-@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
-#log { background: #111; border: 1px solid #333; border-radius: 8px; padding: 1rem;
-       max-height: 70vh; overflow-y: auto; font-family: monospace; font-size: 0.85rem; line-height: 1.6; }
-.entry { padding: 0.25rem 0; border-bottom: 1px solid #1a1a1a; }
-.entry.transfer { color: #f97316; font-weight: bold; }
-.entry.ended { color: #4ade80; }
-.entry.transcript { color: #888; }
-.time { color: #555; margin-right: 0.5rem; }
-.alert-banner { display: none; background: #f97316; color: #000; padding: 1rem;
-                border-radius: 8px; margin-bottom: 1rem; font-weight: bold; font-size: 1.1rem; }
-.alert-banner.show { display: block; }
-</style>
-</head>
-<body>
-<h1>Phone Caller Dashboard</h1>
-<div class="status">
-  <div class="dot" id="statusDot"></div>
-  <span id="statusText">Connecting...</span>
-</div>
-<div class="alert-banner" id="alertBanner"></div>
-<div id="log"></div>
-<script>
-const log = document.getElementById('log');
-const dot = document.getElementById('statusDot');
-const statusText = document.getElementById('statusText');
-const alertBanner = document.getElementById('alertBanner');
-let ws;
-
-function connect() {
-  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  ws = new WebSocket(`${proto}//${location.host}/ws`);
-  ws.onopen = () => {
-    dot.className = 'dot connected';
-    statusText.textContent = 'Connected — waiting for calls';
-  };
-  ws.onclose = () => {
-    dot.className = 'dot';
-    statusText.textContent = 'Disconnected — reconnecting...';
-    setTimeout(connect, 3000);
-  };
-  ws.onmessage = (e) => {
-    const data = JSON.parse(e.data);
-    const time = new Date().toLocaleTimeString('ja-JP');
-    let cls = 'entry';
-    let text = '';
-    if (data.type === 'transfer_requested') {
-      cls = 'entry transfer';
-      text = `TRANSFER: ${data.message} (${data.call_id})`;
-      dot.className = 'dot alert';
-      alertBanner.textContent = data.message;
-      alertBanner.className = 'alert-banner show';
-      if (Notification.permission === 'granted') {
-        new Notification('Transfer Request', { body: data.message });
-      }
-    } else if (data.type === 'call_ended') {
-      cls = 'entry ended';
-      text = `ENDED: ${data.ended_reason} (${data.duration}s) — ${data.summary || 'no summary'}`;
-      dot.className = 'dot connected';
-      alertBanner.className = 'alert-banner';
-    } else if (data.type === 'transcript') {
-      cls = 'entry transcript';
-      text = `[${data.role}] ${data.text}`;
-    } else if (data.type === 'status') {
-      text = `STATUS: ${data.status} (${data.call_id})`;
-    }
-    if (text) {
-      const el = document.createElement('div');
-      el.className = cls;
-      el.innerHTML = `<span class="time">${time}</span>${text}`;
-      log.appendChild(el);
-      log.scrollTop = log.scrollHeight;
-    }
-  };
-}
-
-if ('Notification' in window && Notification.permission === 'default') {
-  Notification.requestPermission();
-}
-connect();
-</script>
-</body>
-</html>
-"""
+_STATIC_DIR = Path(__file__).parent / "static"
 
 
 @app.get("/", response_class=HTMLResponse)
-async def dashboard() -> str:
-    """Serve the real-time call monitoring dashboard."""
-    return _DASHBOARD_HTML
+async def dashboard() -> FileResponse:
+    """Serve the dashboard SPA."""
+    return FileResponse(_STATIC_DIR / "dashboard.html")
 
 
 @app.get("/health")
@@ -382,3 +290,122 @@ async def health() -> JSONResponse:
         "status": "healthy",
         "ws_clients": len(_ws_clients),
     })
+
+
+@app.get("/api/calls")
+async def api_list_calls() -> JSONResponse:
+    """List all call logs, most recent first."""
+    log_dir = _DEFAULT_LOG_DIR
+    if not log_dir.exists():
+        return JSONResponse([])
+
+    calls: list[dict[str, Any]] = []
+    for f in sorted(log_dir.glob("*.json"), reverse=True):
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+            call_obj = data.get("call", data)
+            calls.append({
+                "file": f.name,
+                "call_id": call_obj.get("id", f.stem),
+                "customer_number": (
+                    call_obj.get("customer", {}).get("number", "")
+                    or data.get("customer_number", "")
+                ),
+                "ended_reason": data.get("endedReason", data.get("ended_reason", "")),
+                "duration": data.get("durationSeconds", data.get("duration", 0)),
+                "cost": data.get("cost", 0),
+                "summary": data.get("summary", ""),
+                "timestamp": f.name[:15],  # YYYYMMDD_HHMMSS
+            })
+        except (json.JSONDecodeError, OSError):
+            continue
+
+    return JSONResponse(calls)
+
+
+@app.get("/api/calls/{call_id}")
+async def api_get_call(call_id: str) -> JSONResponse:
+    """Get a single call's full data including transcript."""
+    log_dir = _DEFAULT_LOG_DIR
+    if not log_dir.exists():
+        return JSONResponse({"error": "not found"}, status_code=404)
+
+    for f in log_dir.glob("*.json"):
+        if call_id in f.name:
+            data = json.loads(f.read_text(encoding="utf-8"))
+            return JSONResponse(data)
+
+    return JSONResponse({"error": "not found"}, status_code=404)
+
+
+@app.get("/api/context")
+async def api_get_context() -> JSONResponse:
+    """Get global sales context."""
+    from .prompts import load_context
+    return JSONResponse(load_context())
+
+
+@app.put("/api/context")
+async def api_update_context(request: Request) -> JSONResponse:
+    """Update global sales context."""
+    from .prompts import save_context
+    body = await request.json()
+    save_context(body)
+    return JSONResponse({"status": "saved"})
+
+
+@app.get("/api/stats")
+async def api_stats() -> JSONResponse:
+    """Aggregate cost and call stats by date."""
+    log_dir = _DEFAULT_LOG_DIR
+    if not log_dir.exists():
+        return JSONResponse({"daily": [], "totals": {"calls": 0, "cost": 0, "duration": 0}})
+
+    daily: dict[str, dict[str, float]] = defaultdict(
+        lambda: {"calls": 0, "cost": 0.0, "duration": 0.0}
+    )
+    total_calls = 0
+    total_cost = 0.0
+    total_duration = 0.0
+
+    for f in sorted(log_dir.glob("*.json")):
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+            date_str = f.name[:8]  # YYYYMMDD
+            date_key = f"{date_str[:4]}-{date_str[4:6]}-{date_str[6:8]}"
+            cost = float(data.get("cost", 0))
+            dur = float(data.get("durationSeconds", data.get("duration", 0)))
+            daily[date_key]["calls"] += 1
+            daily[date_key]["cost"] += cost
+            daily[date_key]["duration"] += dur
+            total_calls += 1
+            total_cost += cost
+            total_duration += dur
+        except (json.JSONDecodeError, OSError, ValueError):
+            continue
+
+    return JSONResponse({
+        "daily": [
+            {"date": k, **v} for k, v in sorted(daily.items())
+        ],
+        "totals": {
+            "calls": total_calls,
+            "cost": round(total_cost, 4),
+            "duration": round(total_duration, 1),
+        },
+    })
+
+
+@app.get("/api/phone-numbers")
+async def api_phone_numbers() -> JSONResponse:
+    """List registered phone numbers."""
+    try:
+        from .phone_router import PhoneRouter
+        router = PhoneRouter()
+        numbers = router.list_numbers()
+        return JSONResponse({
+            prefix: entry.to_dict()
+            for prefix, entry in numbers.items()
+        })
+    except Exception:
+        return JSONResponse({})
